@@ -1,11 +1,14 @@
 """
-New route file -- does not touch Vedant's existing files, to avoid merge
-conflicts. Calls his services directly (same process, same FastAPI app)
-and runs the results through the engine.
+Route file for the AI decision engine -- lives in the top-level ai_engine/
+package, kept deliberately separate from Vedant's app/ tree so the two
+codebases stay easy to tell apart and integrate independently. The only
+place this crosses back into app/ is the data-fetching calls below
+(app.services.*) and the one wiring line in app/main.py that registers
+this router -- everything else here is self-contained.
 
-Add to app/main.py:
+Wired into app/main.py as:
 
-    from app.api.routes.decision import router as decision_router
+    from ai_engine.routes.decision import router as decision_router
     app.include_router(decision_router)
 
 Two generations of endpoints live here on purpose:
@@ -14,8 +17,8 @@ Two generations of endpoints live here on purpose:
   graph.py (hard_constraints -> score -> explain -> END). Kept as-is --
   fully tested, cheap, no fan-out.
 - /site-selection/agents, /logistics and /query run the confirmed
-  5-agent + Supervisor + shared-service architecture (app/engine/agents/,
-  app/engine/supervisor.py). /site-selection/agents is the one to demo:
+  5-agent + Supervisor + shared-service architecture (ai_engine/agents/,
+  ai_engine/supervisor.py). /site-selection/agents is the one to demo:
   it's the actual multi-agent flagship, not the single-pipeline stand-in.
 """
 
@@ -28,11 +31,11 @@ from app.api.schemas.verification import VerificationRequest
 from app.services.feasibility_service import get_feasibility
 from app.services.regulatory_service import get_regulatory_data
 from app.services.site_selection_service import get_site_selection_data
-from app.engine.schemas import Recommendation
-from app.engine.graph import build_graph
-from app.engine.agents.site_selection_agent import run_site_selection
-from app.engine.agents.logistics_agent import get_logistics_evidence
-from app.engine import supervisor as supervisor_module
+from ai_engine.schemas import Recommendation
+from ai_engine.graph import build_graph
+from ai_engine.agents.site_selection_agent import run_site_selection
+from ai_engine.agents.logistics_agent import get_logistics_evidence
+from ai_engine import supervisor as supervisor_module
 
 router = APIRouter(prefix="/decision", tags=["Decision Engine"])
 

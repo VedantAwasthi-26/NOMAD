@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from app.services.regulatory_service import get_regulatory_data
 from app.services.permit_research_service import get_permit_research
-from app.engine.schemas import DataGap, EvidenceBundle, SourceSystem
-from app.engine.scoring import score_regulatory_fit
+from ai_engine.schemas import DataGap, EvidenceBundle, SourceSystem
+from ai_engine.scoring import score_regulatory_fit
 
 
 def flatten_regulatory_fields(regulatory) -> dict:

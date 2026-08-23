@@ -22,8 +22,8 @@ import asyncio
 
 from app.services.reverse_logistics_service import get_reverse_logistics_data
 from app.services.risk_service import get_risk_data
-from app.engine.schemas import EvidenceBundle
-from app.engine.scoring import (
+from ai_engine.schemas import EvidenceBundle
+from ai_engine.scoring import (
     apply_hard_floor,
     score_accessibility,
     score_hazard_safety,

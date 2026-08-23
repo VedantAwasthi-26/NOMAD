@@ -2,10 +2,10 @@
 Unit tests for the deterministic scoring engine, and the start of the
 eval fixture set (good / bad / borderline / incomplete locations).
 
-Run with: pytest app/engine/tests/test_scoring.py -v
+Run with: pytest ai_engine/tests/test_scoring.py -v
 """
 
-from app.engine.scoring import (
+from ai_engine.scoring import (
     find_feasibility_blockers,
     is_feasible,
     score_feasibility,
@@ -124,7 +124,7 @@ def test_hard_floor_caps_score_despite_good_other_factors():
     """This is the specific case the hard-floor rule exists for: great
     accessibility/infrastructure, but a genuinely bad hazard reading --
     the overall score must not be allowed to look good."""
-    from app.engine.scoring import apply_hard_floor
+    from ai_engine.scoring import apply_hard_floor
 
     bundle = score_site_selection("Borderline", BORDERLINE_SITE, REGULATORY_CLEAN)
     capped_score, triggered = apply_hard_floor(bundle.factors, bundle.overall_score)

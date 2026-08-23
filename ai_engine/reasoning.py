@@ -39,13 +39,13 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-from app.engine.prompts import (
+from ai_engine.prompts import (
     EXPLANATION_SYSTEM_PROMPT,
     VERIFIER_SYSTEM_PROMPT,
     build_explanation_user_prompt,
     build_verifier_user_prompt,
 )
-from app.engine.schemas import Recommendation
+from ai_engine.schemas import Recommendation
 
 MAX_VERIFIER_RETRIES = 3
 # Must be openai/gpt-oss-120b or openai/gpt-oss-20b -- the two models Groq

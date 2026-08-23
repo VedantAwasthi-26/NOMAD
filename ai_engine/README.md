@@ -1,4 +1,4 @@
-# app/engine — AI / decision engine
+# ai_engine — AI / decision engine
 
 Your part of NOMAD, built directly on top of Vedant's existing services. This
 README says exactly what's real and tested versus what still needs a live
@@ -18,7 +18,7 @@ run on your machine.
 - `reasoning.py` — calls a Groq-hosted LLM via `langchain-groq` with forced
   structured output, runs the explain → verify → retry loop (capped at 3
   attempts), and falls back to a fact-only explanation if the API is
-  unreachable or the cap is hit. Default model is `llama-3.3-70b-versatile`
+  unreachable or the cap is hit. Default model is `openai/gpt-oss-120b`
   (override with `NOMAD_ENGINE_MODEL`) — needs to be tool-use-capable since
   structured output relies on tool calling.
 - `graph.py` — the original single-pipeline LangGraph wiring: ingest → hard
@@ -56,7 +56,7 @@ run on your machine.
   routing accuracy can be evaluated separately from agent output quality.
   `dispatch()`/`handle_query()` fan out to the resolved agent(s) in parallel.
 
-New route file: `app/api/routes/decision.py`, wired into `app/main.py`.
+New route file: `ai_engine/routes/decision.py`, wired into `app/main.py`.
 Two generations of endpoints, both live:
 - `POST /decision/feasibility`, `POST /decision/site-selection` — the
   original single-pipeline `graph.py`. Kept as-is, fully tested.
@@ -77,7 +77,7 @@ constraint allows; here's the honest breakdown.
 
 **Fully tested, passing, real:**
 - `schemas.py` and `scoring.py` — all 8 tests in `tests/test_scoring.py`
-  pass (`pytest app/engine/tests/test_scoring.py -v` to confirm on your own
+  pass (`pytest ai_engine/tests/test_scoring.py -v` to confirm on your own
   machine).
 - `agents/regulatory_agent.py`, `agents/risk_agent.py`,
   `agents/demand_agent.py`, `agents/site_selection_agent.py`,
@@ -107,7 +107,7 @@ constraint allows; here's the honest breakdown.
   `GROQ_API_KEY`, neither available in this sandbox. Their fallback
   paths (fact-only explanation, `requires_human_review=True`) *were*
   exercised, since that's what fires when the LLM call isn't reachable.
-- `prompts.py`, `graph.py`, `app/api/routes/decision.py` — `py_compile`
+- `prompts.py`, `graph.py`, `ai_engine/routes/decision.py` — `py_compile`
   clean; `graph.py`'s node functions and routing logic are plain Python
   (no LLM inside `node_hard_constraints`/`route_after_constraints`) so
   their correctness doesn't depend on the untested LLM layer.
@@ -132,7 +132,7 @@ cp .env.example .env
 # fill in GROQ_API_KEY (and MIREYE_API_KEY/MIREYE_BASE_URL if not already set)
 
 # 1. Confirm the deterministic core still passes (should be instant, no API key needed)
-pytest app/engine/tests/test_scoring.py -v
+pytest ai_engine/tests/test_scoring.py -v
 
 # 2. Smoke-test the full pipeline against a real Mireye + Groq call
 uvicorn app.main:app --reload

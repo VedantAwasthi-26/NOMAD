@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from app.services.risk_service import get_risk_data
 from app.services.multi_location_service import get_multi_location_data
-from app.engine.schemas import EvidenceBundle
-from app.engine.scoring import score_hazard_safety, score_live_conditions
+from ai_engine.schemas import EvidenceBundle
+from ai_engine.scoring import score_hazard_safety, score_live_conditions
 
 
 async def get_risk_evidence(address: str) -> EvidenceBundle:

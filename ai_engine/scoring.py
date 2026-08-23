@@ -9,13 +9,13 @@ explains what these functions decided -- it never overrides a score.
 
 Normalization thresholds below are reasonable, documented starting
 defaults -- tune them once you have real example locations to calibrate
-against (see app/engine/tests/test_scoring.py for the fixture set this
+against (see ai_engine/tests/test_scoring.py for the fixture set this
 was built and checked against).
 """
 
 from __future__ import annotations
 
-from app.engine.schemas import DataGap, EvidenceBundle, FactorScore, SourceSystem
+from ai_engine.schemas import DataGap, EvidenceBundle, FactorScore, SourceSystem
 
 # ---------------------------------------------------------------------------
 # Default weights -- the five factors match the product's own scorecard

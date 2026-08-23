@@ -14,11 +14,11 @@ import asyncio
 import logging
 
 from app.services.site_selection_service import get_site_selection_data
-from app.engine.agents.regulatory_agent import get_regulatory_evidence
-from app.engine.agents.risk_agent import get_risk_evidence
-from app.engine.agents.demand_agent import get_demand_evidence
-from app.engine.schemas import DataGap, EvidenceBundle, FactorScore, Recommendation, SourceSystem
-from app.engine.scoring import (
+from ai_engine.agents.regulatory_agent import get_regulatory_evidence
+from ai_engine.agents.risk_agent import get_risk_evidence
+from ai_engine.agents.demand_agent import get_demand_evidence
+from ai_engine.schemas import DataGap, EvidenceBundle, FactorScore, Recommendation, SourceSystem
+from ai_engine.scoring import (
     apply_hard_floor,
     confidence_from_completeness,
     reweight,
@@ -26,7 +26,7 @@ from app.engine.scoring import (
     score_infrastructure,
     SITE_SELECTION_WEIGHTS,
 )
-from app.engine.reasoning import explain_and_verify
+from ai_engine.reasoning import explain_and_verify
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ Requires `langgraph` (not installed in the sandbox this was authored in).
 The node functions below are written against the current LangGraph
 `StateGraph` API and call straight into scoring.py (already tested) and
 reasoning.py -- give this a real run once you have the package installed
-and an API key set, then check it against app/engine/tests/test_scoring.py's
+and an API key set, then check it against ai_engine/tests/test_scoring.py's
 fixtures for a first end-to-end smoke test.
 """
 
@@ -15,8 +15,8 @@ from __future__ import annotations
 
 from typing import Any, Optional, TypedDict
 
-from app.engine.schemas import Recommendation
-from app.engine.scoring import (
+from ai_engine.schemas import Recommendation
+from ai_engine.scoring import (
     apply_hard_floor,
     confidence_from_completeness,
     find_feasibility_blockers,
@@ -24,7 +24,7 @@ from app.engine.scoring import (
     score_feasibility,
     score_site_selection,
 )
-from app.engine.reasoning import explain_and_verify
+from ai_engine.reasoning import explain_and_verify
 
 
 class EngineState(TypedDict, total=False):

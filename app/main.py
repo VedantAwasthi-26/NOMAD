@@ -21,7 +21,7 @@ from app.api.routes.permit_research import router as permit_research_router
 from app.api.routes.decision_engine import router as decision_engine_router
 from app.api.routes.catchment import router as catchment_router
 from app.api.routes.reverse_logistics import router as reverse_logistics_router
-from app.api.routes.decision import router as decision_router
+from ai_engine.routes.decision import router as decision_router
 
 
 app = FastAPI(

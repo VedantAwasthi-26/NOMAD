@@ -9,8 +9,8 @@ separate from Site Selection rather than inlining it.
 from __future__ import annotations
 
 from app.services.catchment_service import get_catchment_data
-from app.engine.schemas import EvidenceBundle
-from app.engine.scoring import score_population_coverage
+from ai_engine.schemas import EvidenceBundle
+from ai_engine.scoring import score_population_coverage
 
 
 async def get_demand_evidence(address: str, radius_km: float = 10.0) -> EvidenceBundle:

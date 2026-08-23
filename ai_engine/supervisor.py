@@ -23,11 +23,11 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from app.engine.agents.demand_agent import get_demand_evidence
-from app.engine.agents.logistics_agent import get_logistics_evidence
-from app.engine.agents.regulatory_agent import get_regulatory_evidence
-from app.engine.agents.risk_agent import get_risk_evidence
-from app.engine.agents.site_selection_agent import run_site_selection
+from ai_engine.agents.demand_agent import get_demand_evidence
+from ai_engine.agents.logistics_agent import get_logistics_evidence
+from ai_engine.agents.regulatory_agent import get_regulatory_evidence
+from ai_engine.agents.risk_agent import get_risk_evidence
+from ai_engine.agents.site_selection_agent import run_site_selection
 
 # ---------------------------------------------------------------------------
 # The five agents this Supervisor can route to -- these names are the
