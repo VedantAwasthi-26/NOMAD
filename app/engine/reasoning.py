@@ -4,16 +4,28 @@ fact-only fallback. This is the only place in the engine that calls an
 LLM -- everything upstream (scoring.py) is deterministic.
 
 Runs on Groq (via `langchain-groq`), not Anthropic -- `GROQ_API_KEY` is
-what this needs, not `ANTHROPIC_API_KEY`. Structured output relies on
-tool-calling, so DEFAULT_MODEL must be a Groq-hosted model that supports
-tool use (the Llama 3.1/3.3 instruct models do; check Groq's current
-model list -- https://console.groq.com/docs/models -- since which models
-are available there changes over time).
+what this needs, not `ANTHROPIC_API_KEY`.
 
-Not executable in the sandbox this was authored in (no package registry
-access there) -- written and reviewed against the current LangChain /
-Groq tool-use API, but give it a real smoke test against a live key
-before trusting it in the pipeline.
+Structured output uses Groq's JSON Schema strict mode
+(response_format={"type": "json_schema", "json_schema": {..., "strict":
+True}}), called directly rather than through LangChain's
+with_structured_output(). Two other approaches were tried first and both
+failed on real Groq traffic against openai/gpt-oss-120b:
+- LangChain's default method="function_calling" -> `groq.BadRequestError:
+  tool_use_failed`. Confirmed as a real, open compatibility gap between
+  Groq's gpt-oss models and LangChain's tool-forcing strategy --see
+  https://github.com/langchain-ai/langchain/issues/34155.
+- Unstructured response_format={"type": "json_object"} (no schema) ->
+  intermittent `groq.BadRequestError: json_validate_failed` with an empty
+  failed_generation -- a known rough edge with these reasoning models
+  under Groq's own community forum reports.
+JSON Schema strict mode is the one mode Groq's docs explicitly guarantee
+for this model family (openai/gpt-oss-20b and openai/gpt-oss-120b --
+https://console.groq.com/docs/structured-outputs): constrained decoding
+on Groq's side, not the model's own judgment, is what makes the output
+match the schema. DEFAULT_MODEL below must stay one of those two models
+for that guarantee to hold -- an env override to a different model (e.g.
+a Qwen model) is not covered by it.
 """
 
 from __future__ import annotations
@@ -36,8 +48,11 @@ from app.engine.prompts import (
 from app.engine.schemas import Recommendation
 
 MAX_VERIFIER_RETRIES = 3
-# Groq-hosted, tool-use-capable default. Override via NOMAD_ENGINE_MODEL if
-# Groq has since deprecated this one -- check https://console.groq.com/docs/models.
+# Must be openai/gpt-oss-120b or openai/gpt-oss-20b -- the two models Groq
+# guarantees JSON Schema strict-mode compliance for. Override via
+# NOMAD_ENGINE_MODEL only to switch between those two; check
+# https://console.groq.com/docs/structured-outputs before pointing this at
+# anything else, since strict mode isn't guaranteed elsewhere.
 DEFAULT_MODEL = os.getenv("NOMAD_ENGINE_MODEL", "openai/gpt-oss-120b")
 
 
@@ -66,28 +81,52 @@ def _get_llm(temperature: float = 0.2):
     return ChatGroq(model=DEFAULT_MODEL, temperature=temperature)
 
 
-def _invoke_json_mode(llm, messages: list[dict], schema: type[BaseModel]) -> BaseModel:
-    """Calls the LLM with Groq's plain JSON-object response format,
-    bypassing LangChain's with_structured_output() entirely.
+# Groq's JSON Schema strict mode: "required" must list every property, and
+# "additionalProperties": false is mandatory -- both are hard requirements
+# of strict mode, not stylistic choices. See
+# https://console.groq.com/docs/structured-outputs.
+_EXPLANATION_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "explanation_output",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {"explanation": {"type": "string"}},
+            "required": ["explanation"],
+            "additionalProperties": False,
+        },
+    },
+}
 
-    Two different failure modes were observed on Groq going through that
-    wrapper, on two structurally different models:
-    - method="function_calling" (the default): `groq.BadRequestError:
-      tool_use_failed` -- "model did not call a tool".
-    - method="json_mode": `groq.BadRequestError: json_validate_failed` --
-      "Failed to validate JSON" with an empty failed_generation. This
-      smells like langchain-groq's json_mode routing through Groq's
-      stricter structured-outputs (json_schema) validation rather than
-      the plain json_object mode, which these particular models don't
-      reliably satisfy.
+_VERIFIER_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "verifier_verdict",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "grounded": {"type": "boolean"},
+                "issues": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["grounded", "issues"],
+            "additionalProperties": False,
+        },
+    },
+}
 
-    This does exactly what Groq's own docs describe for JSON mode:
-    response_format={"type": "json_object"} (no schema attached, so
-    nothing for Groq to reject the generation against) plus a prompt that
-    says "json" and spells out the exact shape -- then a plain
-    json.loads() + pydantic validate on our side. Any parse/validation
-    failure raises and is caught by the caller's existing except block."""
-    response = llm.bind(response_format={"type": "json_object"}).invoke(messages)
+
+def _invoke_json_schema(
+    llm, messages: list[dict], schema: type[BaseModel], response_format: dict
+) -> BaseModel:
+    """Calls Groq's JSON Schema strict mode directly, bypassing LangChain's
+    with_structured_output() entirely -- see the module docstring for why
+    (both LangChain's forced tool-calling and unstructured json_object
+    mode failed on real Groq traffic against this model). Any parse/
+    validation failure raises and is caught by the caller's existing
+    except block."""
+    response = llm.bind(response_format=response_format).invoke(messages)
     data = json.loads(response.content)
     return schema.model_validate(data)
 
@@ -95,25 +134,27 @@ def _invoke_json_mode(llm, messages: list[dict], schema: type[BaseModel]) -> Bas
 def generate_explanation(payload: dict) -> str:
     """One explanation attempt. Raises if the model can't be reached --
     callers should catch and fall back, not let this bubble to the user."""
-    result = _invoke_json_mode(
+    result = _invoke_json_schema(
         _get_llm(),
         [
             {"role": "system", "content": EXPLANATION_SYSTEM_PROMPT},
             {"role": "user", "content": build_explanation_user_prompt(payload)},
         ],
         ExplanationOutput,
+        _EXPLANATION_RESPONSE_FORMAT,
     )
     return result.explanation
 
 
 def verify_explanation(factor_breakdown: list[dict], explanation: str) -> VerifierVerdict:
-    return _invoke_json_mode(
+    return _invoke_json_schema(
         _get_llm(temperature=0.0),
         [
             {"role": "system", "content": VERIFIER_SYSTEM_PROMPT},
             {"role": "user", "content": build_verifier_user_prompt(factor_breakdown, explanation)},
         ],
         VerifierVerdict,
+        _VERIFIER_RESPONSE_FORMAT,
     )
 
 

@@ -131,14 +131,40 @@ shape:
 Use only the five agent names listed above, spelled exactly as shown."""
 
 
+# Same requirement as reasoning.DEFAULT_MODEL: must be openai/gpt-oss-120b
+# or openai/gpt-oss-20b, the two models Groq guarantees JSON Schema strict
+# mode for (https://console.groq.com/docs/structured-outputs).
+_MODEL = os.getenv("NOMAD_ENGINE_MODEL", "openai/gpt-oss-120b")
+
+# "required" listing every property and "additionalProperties": false are
+# mandatory for Groq's strict mode, not stylistic. used_llm_fallback isn't
+# asked of the model -- it's set by this module after the call -- so it's
+# deliberately left out of the schema.
+_ROUTE_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "route_decision",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "agents": {"type": "array", "items": {"type": "string"}},
+                "reasoning": {"type": "string"},
+            },
+            "required": ["agents", "reasoning"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+
 def _get_llm(temperature: float = 0.0):
     # Imported lazily, same pattern as reasoning.py, so this module stays
     # importable (and rule_based_route testable) without langchain-groq
     # installed.
     from langchain_groq import ChatGroq
 
-    model = os.getenv("NOMAD_ENGINE_MODEL", "openai/gpt-oss-120b")
-    return ChatGroq(model=model, temperature=temperature)
+    return ChatGroq(model=_MODEL, temperature=temperature)
 
 
 def llm_route(query: str) -> RouteDecision:
@@ -146,12 +172,12 @@ def llm_route(query: str) -> RouteDecision:
     Requires langchain-groq + GROQ_API_KEY, same as the explanation layer
     -- not executable in a sandbox without those.
 
-    Calls Groq's plain JSON-object mode directly rather than going through
-    LangChain's with_structured_output() -- see the note in
-    reasoning._invoke_json_mode for why (that wrapper failed under both
-    function_calling and json_mode on the models this project has tried)."""
+    Calls Groq's JSON Schema strict mode directly rather than going through
+    LangChain's with_structured_output() -- see the module docstring in
+    reasoning.py for why (LangChain's forced tool-calling and unstructured
+    json_object mode both failed on real Groq traffic against this model)."""
     llm = _get_llm()
-    response = llm.bind(response_format={"type": "json_object"}).invoke(
+    response = llm.bind(response_format=_ROUTE_RESPONSE_FORMAT).invoke(
         [
             {"role": "system", "content": _ROUTER_SYSTEM_PROMPT},
             {"role": "user", "content": query},
