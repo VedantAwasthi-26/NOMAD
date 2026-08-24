@@ -1,6 +1,7 @@
 from app.integrations.mireye.client import mireye_client
 from app.integrations.mireye.mapper import map_mireye_response
 from app.integrations.mireye.regulatory import RegulatoryResult
+from app.integrations.external.regulatory import get_regulatory_external_data
 
 
 async def get_regulatory_data(address: str) -> RegulatoryResult:
@@ -29,8 +30,12 @@ async def get_regulatory_data(address: str) -> RegulatoryResult:
 
     result = await mireye_client.fetch(payload)
     mapped = map_mireye_response(result)
-
     fields = mapped["fields"]
+
+    external_data = await get_regulatory_external_data(
+        lat=mapped["lat"],
+        lng=mapped["lng"],
+    )
 
     return RegulatoryResult(
         lat=mapped["lat"],
@@ -78,4 +83,5 @@ async def get_regulatory_data(address: str) -> RegulatoryResult:
             "karst_exposure_class": fields.get("karst_exposure_class"),
         },
         data_quality=mapped.get("partial_failures", []),
+        external_data=external_data,
     )

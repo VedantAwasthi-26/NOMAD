@@ -1,13 +1,13 @@
 from app.integrations.mireye.client import mireye_client
 from app.integrations.mireye.mapper import map_mireye_response
 from app.integrations.mireye.catchment import CatchmentData
+from app.integrations.external.catchment import get_market_benchmark
 
 
 async def get_catchment_data(
     address: str,
     radius_km: float,
 ) -> CatchmentData:
-
     payload = {
         "preset": "site_selection",
         "address": address,
@@ -20,7 +20,6 @@ async def get_catchment_data(
 
     result = await mireye_client.fetch(payload)
     mapped = map_mireye_response(result)
-
     fields = mapped["fields"]
 
     population = fields.get("county_population")
@@ -34,14 +33,18 @@ async def get_catchment_data(
         area_km2 = 3.14159265359 * (radius_km ** 2)
         population_density = population / area_km2
 
+    benchmark = await get_market_benchmark()
+
     demand_estimate = {
         "population_within_catchment_proxy": population,
         "population_density_proxy_per_km2": population_density,
+        "market_benchmark": benchmark,
     }
 
     market_potential = {
         "catchment_radius_km": radius_km,
         "population_base": population,
+        "market_benchmark": benchmark,
     }
 
     return CatchmentData(
