@@ -106,7 +106,7 @@ opportunity areas in the project plan:
 
 | Endpoint prefix | Capability |
 |---|---|
-| `/locations` | Health check + location intake |
+| `/locations` | location intake |
 | `/verification` | Address & Facility Verification |
 | `/feasibility` | Site & Facility Feasibility Screening |
 | `/site-selection` | Facility & Site Selection scoring |
