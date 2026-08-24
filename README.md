@@ -2,14 +2,14 @@
 
 NOMAD is a physical-world decision-intelligence platform built on top of
 Mireye's location data API. It answers the questions companies ask about
-their physical footprint — where to open a facility, whether a site is
+their physical footprint where to open a facility, whether a site is
 feasible, whether an address is real, what regulatory exposure a location
-carries, and how a multi-location network compares — by resolving addresses
+carries, and how a multi-location network compares by resolving addresses
 into a standardized, cited physical-world profile and running scoring/
 decision logic on top of it.
 
 
-## 🛠️ Quick Start
+##  Quick Start
 
 ### Prerequisites
 - Python: 3.11 or higher, pip (backend, ai-engine)
@@ -151,7 +151,7 @@ modules.
 - **Frontend:** add pages under `src/pages/`, shared UI under
   `src/components/`, and API calls through `src/api/`.
 
-## 🧪 Local Testing & Quality Assurance
+##  Local Testing & Quality Assurance
 
 Before pushing your changes or opening a Pull Request, run the checks for
 your module locally:
@@ -170,7 +170,7 @@ npm test -- --watch=false
 npm run build
 ```
 
-## 🔀 Pull Request Rules
+##  Pull Request Rules
 
 - Push your branch to remote: `git push origin backend/<feature-name>`.
 - Open a Pull Request targeting `main`.
