@@ -26,7 +26,7 @@ cd NOMAD
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+source .venv/bin/activate        
 pip install -r requirements.txt
 cp .env.example .env             # fill in MIREYE_API_KEY and MIREYE_BASE_URL
 uvicorn app.main:app --reload
@@ -59,7 +59,7 @@ NOMAD/
 │       ├── ci-backend.yml       # runs on backend/** changes
 │       ├── ci-ai-engine.yml     # runs on ai-engine/** changes
 │       ├── ci-frontend.yml      # runs on frontend/** changes
-│       └── pr-checks.yml        # branch name + PR title convention
+│       └── pr-checks.yml        
 │
 ├── backend/                      # Backend & Mireye Integration
 │   ├── app/
