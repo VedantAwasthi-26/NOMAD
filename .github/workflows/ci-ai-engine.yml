@@ -24,12 +24,16 @@ jobs:
     needs: changes
     if: needs.changes.outputs.ai_engine == 'true'
     runs-on: ubuntu-latest
+    # GitHub Actions doesn't allow `secrets` directly inside an `if:`
+    # expression combined with other conditions — map it to a plain env
+    # var first, then check that instead (the standard workaround).
+    env:
+      HAS_MIREYE_KEY: ${{ secrets.MIREYE_API_KEY != '' }}
     defaults:
       run:
         working-directory: 'AI Engine'
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -64,7 +68,7 @@ jobs:
       # Root-level test_*.py scripts hit the real Mireye API the same
       # way backend's do — only run with the secret configured.
       - name: Integration tests (requires MIREYE_API_KEY secret)
-        if: steps.probe.outputs.present == 'true' && secrets.MIREYE_API_KEY != ''
+        if: steps.probe.outputs.present == 'true' && env.HAS_MIREYE_KEY == 'true'
         env:
           MIREYE_API_KEY: ${{ secrets.MIREYE_API_KEY }}
           MIREYE_BASE_URL: ${{ secrets.MIREYE_BASE_URL }}
