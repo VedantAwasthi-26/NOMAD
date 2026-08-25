@@ -1,0 +1,71 @@
+name: ci-frontend
+
+# No `paths:` filter here on purpose — this workflow must always run and
+# report a status, because it's a required check in branch protection.
+# If it only triggered on frontend/** changes, a PR that never touches
+# frontend/ would leave this check stuck at "Expected — waiting for
+# status to be reported" forever, and GitHub would refuse to let it merge.
+# Instead: always run, detect whether frontend/ actually changed, and
+# skip straight to success if it didn't.
+on:
+  push:
+    branches: [main, frontend]
+  pull_request:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+
+  build-and-test:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # Branch protection should require THIS job's name ("result"), not
+  # build-and-test directly — that way it always exists and always
+  # reports a status, whether or not build-and-test actually ran.
+  result:
+    needs: [changes, build-and-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check outcome
+        run: |
+          if [ "${{ needs.changes.outputs.frontend }}" = "true" ] && [ "${{ needs.build-and-test.result }}" != "success" ]; then
+            echo "frontend build/test failed"
+            exit 1
+          fi
+          echo "OK (frontend not touched, or build/test passed)"

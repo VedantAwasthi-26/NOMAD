@@ -1,0 +1,91 @@
+name: ci-ai-engine
+
+# See ci-frontend.yml for why there's no top-level `paths:` filter.
+on:
+  push:
+    branches: [main, ai-engine]
+  pull_request:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      ai_engine: ${{ steps.filter.outputs.ai_engine }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ai_engine:
+              - 'AI Engine/**'
+
+  build-and-test:
+    needs: changes
+    if: needs.changes.outputs.ai_engine == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 'AI Engine'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # As of now "AI Engine/" only holds a placeholder README — once the
+      # real app lands (with its own requirements.txt) this turns on
+      # automatically. Until then, this exits cleanly.
+      - name: Check for real project
+        id: probe
+        run: |
+          if [ -f requirements.txt ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No requirements.txt yet under 'AI Engine/' — nothing to build."
+          fi
+
+      - name: Install dependencies
+        if: steps.probe.outputs.present == 'true'
+        run: pip install -r requirements.txt
+
+      - name: Compile check (catches syntax errors)
+        if: steps.probe.outputs.present == 'true'
+        run: python -m compileall -q app
+
+      # app/engine/tests/ (e.g. test_scoring.py) is pure-logic pytest —
+      # no external calls, no secrets needed, safe to always run.
+      - name: Unit tests (pure logic, no external calls)
+        if: steps.probe.outputs.present == 'true'
+        run: pytest app/engine/tests -v
+
+      # Root-level test_*.py scripts hit the real Mireye API the same
+      # way backend's do — only run with the secret configured.
+      - name: Integration tests (requires MIREYE_API_KEY secret)
+        if: steps.probe.outputs.present == 'true' && secrets.MIREYE_API_KEY != ''
+        env:
+          MIREYE_API_KEY: ${{ secrets.MIREYE_API_KEY }}
+          MIREYE_BASE_URL: ${{ secrets.MIREYE_BASE_URL }}
+        run: |
+          for f in test_*.py; do
+            echo "::group::$f"
+            python "$f"
+            echo "::endgroup::"
+          done
+
+  # Branch protection should require THIS job ("result"), not
+  # build-and-test directly.
+  result:
+    needs: [changes, build-and-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check outcome
+        run: |
+          if [ "${{ needs.changes.outputs.ai_engine }}" = "true" ] && [ "${{ needs.build-and-test.result }}" != "success" ]; then
+            echo "AI Engine build/test failed"
+            exit 1
+          fi
+          echo "OK (AI Engine not touched, or build/test passed)"
