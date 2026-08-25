@@ -16,12 +16,15 @@ async def get_site_selection_data(address: str) -> SiteSelectionData:
             "nearest_substation_distance_m",
             "nearest_substation_max_voltage_kv",
             "county_population",
+            "wildfire_annual_frequency",
+            "landslide_susceptibility_index",
+            "seismic_design_category",
+            "wetland_fraction_of_parcel",
         ],
     }
 
     result = await mireye_client.fetch(payload)
     mapped = map_mireye_response(result)
-
     fields = mapped["fields"]
 
     return SiteSelectionData(
@@ -52,6 +55,19 @@ async def get_site_selection_data(address: str) -> SiteSelectionData:
             ),
             "elevation_m": fields.get("elevation_m"),
             "slope_degrees": fields.get("slope_degrees"),
+            "fema_flood_zone": fields.get("fema_flood_zone"),
+            "wildfire_annual_frequency": fields.get(
+                "wildfire_annual_frequency"
+            ),
+            "landslide_susceptibility_index": fields.get(
+                "landslide_susceptibility_index"
+            ),
+            "seismic_design_category": fields.get(
+                "seismic_design_category"
+            ),
+            "wetland_fraction_of_parcel": fields.get(
+                "wetland_fraction_of_parcel"
+            ),
         },
         regulatory={
             "parcel_zoning": fields.get("parcel_zoning"),
