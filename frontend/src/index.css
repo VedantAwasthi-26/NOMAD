@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 4%;
+    --foreground: 213 31% 91%;
+    --border: 215 28% 17%;
+    --input: 215 28% 17%;
+    --ring: 172 66% 50%;
+    --primary: 172 66% 50%;
+    --primary-foreground: 222 47% 4%;
+    --secondary: 215 28% 17%;
+    --secondary-foreground: 213 31% 91%;
+    --muted: 215 28% 17%;
+    --muted-foreground: 217 19% 46%;
+    --accent: 215 28% 17%;
+    --accent-foreground: 213 31% 91%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+}
