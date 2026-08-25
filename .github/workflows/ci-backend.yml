@@ -26,6 +26,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    # GitHub Actions doesn't allow `secrets` directly inside an `if:`
+    # expression combined with other conditions — map it to a plain env
+    # var first, then check that instead (the standard workaround).
+    env:
+      HAS_MIREYE_KEY: ${{ secrets.MIREYE_API_KEY != '' }}
     defaults:
       run:
         working-directory: backend
@@ -59,7 +64,7 @@ jobs:
       # MIREYE_API_KEY secret is configured on the repo; otherwise this
       # step is skipped rather than failing every PR that lacks it.
       - name: Integration tests (requires MIREYE_API_KEY secret)
-        if: ${{ secrets.MIREYE_API_KEY != '' }}
+        if: env.HAS_MIREYE_KEY == 'true'
         env:
           MIREYE_API_KEY: ${{ secrets.MIREYE_API_KEY }}
           MIREYE_BASE_URL: ${{ secrets.MIREYE_BASE_URL }}
