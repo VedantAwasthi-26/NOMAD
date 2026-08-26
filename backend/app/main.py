@@ -1,3 +1,18 @@
+import sys
+from pathlib import Path
+
+# ai_engine/ lives as a flat sibling of backend/ at the repo root, outside
+# backend/'s own working directory -- this app is run with backend/ as
+# cwd (so `from app.api.routes.x import y` resolves against backend/app/),
+# which means ai_engine isn't importable without an explicit sys.path
+# entry pointing at the repo root. Two levels up from this file
+# (backend/app/main.py -> backend/app -> backend -> repo root) is that root.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from dotenv import load_dotenv
+
+load_dotenv()  # picks up GROQ_API_KEY (and anything else in .env) for ai_engine/reasoning.py
+
 from fastapi import FastAPI
 from app.api.routes.locations import router as locations_router
 from app.api.routes.verification import router as verification_router
@@ -11,6 +26,7 @@ from app.api.routes.decision_engine import router as decision_engine_router
 from app.api.routes.catchment import router as catchment_router
 from app.api.routes.reverse_logistics import router as reverse_logistics_router
 from app.api.routes.inventory_transfer import router as inventory_transfer_router
+from ai_engine.routes.decision import router as decision_router
 
 
 app = FastAPI(
@@ -30,3 +46,4 @@ app.include_router(decision_engine_router)
 app.include_router(catchment_router)
 app.include_router(reverse_logistics_router)
 app.include_router(inventory_transfer_router)
+app.include_router(decision_router)
