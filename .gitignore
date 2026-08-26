@@ -1,0 +1,27 @@
+# Root-level gitignore -- covers ai_engine/ and conftest.py, which live
+# at the repo root as flat siblings of backend/ and aren't covered by
+# backend/.gitignore.
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.venv/
+venv/
+env/
+
+.env
+
+.pytest_cache/
+.coverage
+
+.vscode/
+.idea/
+
+.DS_Store
+Thumbs.db
+
+# Runtime data for ai_engine's StartupContext persistence
+# (ai_engine/storage.py) -- generated locally, not source, never committed.
+ai_engine/memory.db
