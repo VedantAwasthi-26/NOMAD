@@ -1,0 +1,91 @@
+name: ci-backend
+
+# See ci-frontend.yml for why there's no top-level `paths:` filter —
+# this must always run so it can always report a status for branch
+# protection, even on PRs that never touch backend/.
+on:
+  push:
+    branches: [main, backend]
+  pull_request:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+
+  build-and-test:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    # GitHub Actions doesn't allow `secrets` directly inside an `if:`
+    # expression combined with other conditions — map it to a plain env
+    # var first, then check that instead (the standard workaround).
+    env:
+      HAS_MIREYE_KEY: ${{ secrets.MIREYE_API_KEY != '' }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Compile check (catches syntax errors)
+        run: python -m compileall -q app
+
+      # app/config/settings.py requires MIREYE_API_KEY / MIREYE_BASE_URL
+      # with no defaults, so even importing the app fails without them.
+      # Dummy values here just prove the app wires up correctly — this
+      # does not exercise real Mireye calls.
+      - name: Import smoke test
+        env:
+          MIREYE_API_KEY: dummy-ci-key
+          MIREYE_BASE_URL: https://example.invalid
+        run: python -c "from app.main import app; print('app import OK:', app.title)"
+
+      # tests/test_*.py are plain asyncio scripts that hit the real
+      # Mireye API (not pytest, no mocks). They only run if a real
+      # MIREYE_API_KEY secret is configured on the repo; otherwise this
+      # step is skipped rather than failing every PR that lacks it.
+      - name: Integration tests (requires MIREYE_API_KEY secret)
+        if: env.HAS_MIREYE_KEY == 'true'
+        env:
+          MIREYE_API_KEY: ${{ secrets.MIREYE_API_KEY }}
+          MIREYE_BASE_URL: ${{ secrets.MIREYE_BASE_URL }}
+        run: |
+          for f in tests/test_*.py; do
+            echo "::group::$f"
+            python "$f"
+            echo "::endgroup::"
+          done
+
+  # Branch protection should require THIS job ("result"), not
+  # build-and-test directly.
+  result:
+    needs: [changes, build-and-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check outcome
+        run: |
+          if [ "${{ needs.changes.outputs.backend }}" = "true" ] && [ "${{ needs.build-and-test.result }}" != "success" ]; then
+            echo "backend build/test failed"
+            exit 1
+          fi
+          echo "OK (backend not touched, or build/test passed)"

@@ -11,11 +11,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv()  # picks up GROQ_API_KEY (and anything else in .env) for ai_engine/reasoning.py
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from app.api.routes.locations import router as locations_router
 from app.api.routes.verification import router as verification_router
 from app.api.routes.feasibility import router as feasibility_router
@@ -28,6 +27,7 @@ from app.api.routes.decision_engine import router as decision_engine_router
 from app.api.routes.catchment import router as catchment_router
 from app.api.routes.reverse_logistics import router as reverse_logistics_router
 from app.api.routes.inventory_transfer import router as inventory_transfer_router
+from ai_engine.routes.decision import router as decision_router
 
 from ai_engine.routes.decision import router as decision_router
 
@@ -40,8 +40,8 @@ app = FastAPI(
 # different origin than this API (http://localhost:8000) -- without CORS
 # enabled, every fetch() call from the browser gets silently blocked by
 # the browser itself before it even reaches these routes. Wide open here
-# since this is a hackathon demo; tighten allow_origins to the real
-# frontend URL before shipping this anywhere else.
+# since this is a hackathon demo, not a public deployment; tighten
+# allow_origins to the real frontend URL before shipping this anywhere else.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
