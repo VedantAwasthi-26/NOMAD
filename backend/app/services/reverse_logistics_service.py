@@ -19,6 +19,7 @@ async def get_reverse_logistics_data(
     destinations = []
     data_quality = []
 
+    # Fetch origin data
     result = await mireye_client.fetch({
         "preset": "site_selection",
         "address": origin_address,
@@ -36,6 +37,7 @@ async def get_reverse_logistics_data(
 
     data_quality.extend(mapped.get("partial_failures", []))
 
+    # Fetch destination data
     for address in destination_addresses:
         result = await mireye_client.fetch({
             "preset": "site_selection",
@@ -53,9 +55,34 @@ async def get_reverse_logistics_data(
         })
 
         data_quality.extend(mapped.get("partial_failures", []))
+
+    # Get actual driving distance and duration
+    proximity_result = None
+
+    try:
+        proximity_result = await mireye_client.proximity({
+            "op": "distance",
+            "origins": [origin_address],
+            "destinations": destination_addresses,
+            "mode": "driving",
+            "units": "miles",
+            "max_credits": max(len(destination_addresses) * 14, 1),
+        })
+    except Exception as exc:
+        data_quality.append({
+            "field": "proximity",
+            "reason": f"Mireye proximity request failed: {exc}",
+            "source_system": "mireye",
+        })
+
+    proximity_by_index = {
+        leg["destination_index"]: leg
+        for leg in (proximity_result or {}).get("legs", [])
+    }
+
     destination_ranking = []
 
-    for destination in destinations:
+    for index, destination in enumerate(destinations):
         fields = destination["fields"]
 
         road_distance = fields.get(
@@ -66,27 +93,23 @@ async def get_reverse_logistics_data(
             "nearest_substation_distance_m"
         )
 
-        score = 100.0
+        route = proximity_by_index.get(index, {})
 
-        if isinstance(road_distance, (int, float)):
-            score -= min(road_distance / 1000, 30)
-
-        if isinstance(substation_distance, (int, float)):
-            score -= min(substation_distance / 1000, 20)
-
-        destination_ranking.append(
-            {
-                "address": destination["address"],
-                "score": round(max(score, 0), 2),
-                "road_distance_m": road_distance,
-                "substation_distance_m": substation_distance,
-            }
-        )
-
-    destination_ranking.sort(
-        key=lambda x: x["score"],
-        reverse=True,
-    )
+        destination_ranking.append({
+            "address": destination["address"],
+            "road_distance_m": road_distance,
+            "substation_distance_m": substation_distance,
+            "driving_distance_miles": route.get(
+                "distance_miles"
+            ),
+            "driving_distance_km": route.get(
+                "distance_km"
+            ),
+            "driving_duration_minutes": route.get(
+                "duration_minutes"
+            ),
+            "route_flag": route.get("flag"),
+        })
 
     return ReverseLogisticsData(
         origin_address=origin_address,

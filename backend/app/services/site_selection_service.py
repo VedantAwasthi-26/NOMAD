@@ -3,7 +3,11 @@ from app.integrations.mireye.mapper import map_mireye_response
 from app.integrations.mireye.site_selection import SiteSelectionData
 
 
-async def get_site_selection_data(address: str) -> SiteSelectionData:
+async def get_site_selection_data(
+    address: str,
+    reference_addresses: list[str] | None = None,
+) -> SiteSelectionData:
+
     payload = {
         "preset": "site_selection",
         "address": address,
@@ -26,6 +30,20 @@ async def get_site_selection_data(address: str) -> SiteSelectionData:
     result = await mireye_client.fetch(payload)
     mapped = map_mireye_response(result)
     fields = mapped["fields"]
+
+    logistics_proximity = []
+
+    if reference_addresses:
+        proximity_result = await mireye_client.proximity({
+            "op": "distance",
+            "origins": [address],
+            "destinations": reference_addresses,
+            "mode": "driving",
+            "units": "miles",
+            "max_credits": max(len(reference_addresses) * 14, 1),
+        })
+
+        logistics_proximity = proximity_result.get("legs", [])
 
     return SiteSelectionData(
         lat=mapped["lat"],
@@ -88,5 +106,6 @@ async def get_site_selection_data(address: str) -> SiteSelectionData:
                 "county_population_density"
             ),
         },
+        logistics_proximity=logistics_proximity,
         data_quality=mapped.get("partial_failures", []),
     )

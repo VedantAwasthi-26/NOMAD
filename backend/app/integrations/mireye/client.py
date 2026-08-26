@@ -26,6 +26,10 @@ class MireyeClient:
         response.raise_for_status()
         return response.json()
 
+    async def proximity(self, payload: dict):
+        response = await self.client.post("/v1/proximity", json=payload)
+        response.raise_for_status()
+        return response.json()
 
 mireye_client = MireyeClient(
     api_key=settings.mireye_api_key,
