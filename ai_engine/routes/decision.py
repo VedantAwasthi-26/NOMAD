@@ -23,6 +23,13 @@ Two generations of endpoints live here on purpose:
   single-pipeline stand-in. /inventory-transfer is the many-to-many
   counterpart to /logistics, added once Vedant shipped
   inventory_transfer_service.py.
+- /intake is the query-based intake agent: takes a startup's own
+  submitted data (business_type, intended_use, required_capabilities),
+  not location data, and either confirms it's complete or returns
+  specific StartupDataRequests for whatever's missing. Meant to run
+  before site-selection/agents, not alongside it -- its output
+  (StartupContext) is what that endpoint would eventually take as
+  startup_context once the frontend collects it.
 """
 
 from typing import Any, Optional
@@ -34,10 +41,11 @@ from app.api.schemas.verification import VerificationRequest
 from app.services.feasibility_service import get_feasibility
 from app.services.regulatory_service import get_regulatory_data
 from app.services.site_selection_service import get_site_selection_data
-from ai_engine.schemas import Recommendation
+from ai_engine.schemas import Recommendation, StartupContext, StartupDataRequest
 from ai_engine.graph import build_graph
 from ai_engine.agents.site_selection_agent import run_site_selection
 from ai_engine.agents.logistics_agent import get_logistics_evidence, get_inventory_transfer_evidence
+from ai_engine.agents.intake_agent import intake_startup_data
 from ai_engine import supervisor as supervisor_module
 
 router = APIRouter(prefix="/decision", tags=["Decision Engine"])
@@ -158,6 +166,33 @@ async def decide_inventory_transfer(request: InventoryTransferRequest) -> dict:
     return await get_inventory_transfer_evidence(
         request.source_addresses, request.destination_addresses
     )
+
+
+class IntakeRequest(BaseModel):
+    startup_id: str
+    business_type: Optional[str] = None
+    intended_use: Optional[str] = None
+    required_capabilities: list[str] = []
+    confirmed_facts: dict[str, Any] = {}
+
+
+class IntakeResponse(BaseModel):
+    complete: bool
+    startup_context: StartupContext
+    missing: list[StartupDataRequest]
+
+
+@router.post("/intake", response_model=IntakeResponse)
+async def decide_intake(request: IntakeRequest) -> IntakeResponse:
+    """Query-based intake agent: builds a StartupContext from whatever the
+    startup submitted and checks it against the three fields confirmed
+    over the team's design discussion (business_type, intended_use,
+    required_capabilities). `complete=False` means `missing` has at least
+    one StartupDataRequest the frontend should turn into a follow-up
+    question -- nothing downstream should treat this startup_context as
+    ready for scoring until `complete` is True."""
+    context, missing = intake_startup_data(request.model_dump())
+    return IntakeResponse(complete=not missing, startup_context=context, missing=missing)
 
 
 class SupervisorQueryRequest(BaseModel):

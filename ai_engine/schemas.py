@@ -167,3 +167,29 @@ class MemoryUpdateProposal(BaseModel):
     source_system: SourceSystem = SourceSystem.DERIVED
     confidence: float = Field(0.5, ge=0, le=1)
     status: str = Field("pending", description="pending | confirmed | rejected")
+
+
+class StartupDataRequest(BaseModel):
+    """The mirror image of MemoryUpdateProposal: instead of the AI
+    proposing a value for a human to confirm, this is the AI *asking* the
+    startup to supply a value it doesn't have at all yet.
+
+    This is what the query-based intake agent (ai_engine/agents/
+    intake_agent.py) emits when a startup submits its initial data
+    (business_type, intended_use, required_capabilities) and one of those
+    required fields is missing or empty -- instead of just letting a bare
+    DataGap silently reduce confidence, the intake agent generates one of
+    these per missing field so the frontend/user has something concrete
+    and specific to answer, before the recommendation ever runs.
+
+    Deliberately inert, same as MemoryUpdateProposal: nothing here writes
+    to StartupContext on its own. `status` starts "pending" until the
+    startup answers it, at which point the answer is expected to flow back
+    in as an updated StartupContext (or a MemoryUpdateProposal, if it's an
+    update to something already on file rather than a first-time answer)."""
+
+    startup_id: str
+    field: str
+    prompt: str = Field(..., description="Human-readable question to show the startup, e.g. 'What type of business is this?'")
+    reason: str = Field(..., description="Why this field is needed, e.g. 'required to score regulatory fit accurately'")
+    status: str = Field("pending", description="pending | answered")
