@@ -69,15 +69,43 @@ async def get_inventory_transfer_data(
         )
 
     transfer_ranking = []
+    proximity_result = None
 
-    for source in sources:
-        for destination in destinations:
+    try:
+        proximity_result = await mireye_client.proximity({
+            "op": "distance",
+            "origins": source_addresses,
+            "destinations": destination_addresses,
+            "mode": "driving",
+            "units": "miles",
+            "max_credits": max(
+                len(source_addresses)
+                * len(destination_addresses)
+                * 14,
+                1,
+            ),
+        })
+    except Exception as exc:
+        data_quality.append({
+            "field": "proximity",
+            "reason": f"Mireye proximity request failed: {exc}",
+            "source_system": "mireye",
+        })
 
-            lat_diff = source.lat - destination.lat
-            lng_diff = source.lng - destination.lng
+    proximity_by_pair = {
+        (
+            leg["origin_index"],
+            leg["destination_index"],
+        ): leg
+        for leg in (proximity_result or {}).get("legs", [])
+    }
 
-            distance_proxy = (
-                (lat_diff ** 2 + lng_diff ** 2) ** 0.5
+    for source_index, source in enumerate(sources):
+        for destination_index, destination in enumerate(destinations):
+
+            route = proximity_by_pair.get(
+                (source_index, destination_index),
+                {},
             )
 
             road_distance = destination.fields.get(
@@ -87,25 +115,6 @@ async def get_inventory_transfer_data(
             substation_distance = destination.fields.get(
                 "nearest_substation_distance_m"
             )
-
-            score = max(
-                100 - (distance_proxy * 10),
-                0,
-            )
-
-            if isinstance(road_distance, (int, float)):
-                score -= min(
-                    road_distance / 1000,
-                    20,
-                )
-
-            if isinstance(substation_distance, (int, float)):
-                score -= min(
-                    substation_distance / 1000,
-                    10,
-                )
-
-            score = max(score, 0)
 
             transfer_ranking.append(
                 {
@@ -120,21 +129,21 @@ async def get_inventory_transfer_data(
                             "lat": destination.lat,
                             "lng": destination.lng,
                         },
-                        "distance_proxy": round(
-                            distance_proxy,
-                            4,
+                        "driving_distance_miles": route.get(
+                            "distance_miles"
                         ),
+                        "driving_distance_km": route.get(
+                            "distance_km"
+                        ),
+                        "driving_duration_minutes": route.get(
+                            "duration_minutes"
+                        ),
+                        "route_flag": route.get("flag"),
                     },
                     "road_distance_m": road_distance,
                     "substation_distance_m": substation_distance,
-                    "score": round(score, 2),
                 }
             )
-
-    transfer_ranking.sort(
-        key=lambda x: x["score"],
-        reverse=True,
-    )
 
     return InventoryTransferData(
         source_locations=sources,
@@ -142,6 +151,7 @@ async def get_inventory_transfer_data(
         transfer_factors={
             "source_count": len(sources),
             "destination_count": len(destinations),
+            "route_count": len(transfer_ranking),
         },
         data_quality=data_quality,
         transfer_ranking=transfer_ranking,

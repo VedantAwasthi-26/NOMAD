@@ -29,6 +29,7 @@ from app.api.routes.reverse_logistics import router as reverse_logistics_router
 from app.api.routes.inventory_transfer import router as inventory_transfer_router
 from ai_engine.routes.decision import router as decision_router
 
+from ai_engine.routes.decision import router as decision_router
 
 app = FastAPI(
     title="NOMAD Backend",
