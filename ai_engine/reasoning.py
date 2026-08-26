@@ -211,9 +211,13 @@ def explain_and_verify(
 
     try:
         explanation: Optional[str] = None
+        attempts_log: list[dict] = []
         for attempt in range(1, MAX_VERIFIER_RETRIES + 1):
             explanation = generate_explanation(payload)
             verdict = verify_explanation(factor_breakdown_dicts, explanation, startup_context_dict)
+            attempts_log.append(
+                {"attempt": attempt, "explanation": explanation, "issues": verdict.issues}
+            )
             if verdict.grounded:
                 recommendation.explanation = explanation
                 recommendation.verified_groundedness = True
@@ -221,10 +225,15 @@ def explain_and_verify(
             # not grounded -- retry, feeding the issues back in
             payload["previous_attempt_issues"] = verdict.issues
 
-        # retries exhausted without a grounded explanation
+        # retries exhausted without a grounded explanation -- log every
+        # attempt's actual explanation text and the verifier's specific
+        # issues, not just the fact that it exhausted retries. Without
+        # this, "exhausted 3 retries" tells you nothing about *why* the
+        # verifier keeps rejecting it -- a real prompt/model mismatch
+        # looks identical in the log to a transient blip otherwise.
         logger.warning(
-            "explain_and_verify: exhausted %d retries without a grounded explanation for %r",
-            MAX_VERIFIER_RETRIES, recommendation.address,
+            "explain_and_verify: exhausted %d retries without a grounded explanation for %r -- attempts=%s",
+            MAX_VERIFIER_RETRIES, recommendation.address, json.dumps(attempts_log, default=str),
         )
         recommendation.explanation = _fact_only_explanation(recommendation)
         recommendation.verified_groundedness = False

@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()  # picks up GROQ_API_KEY (and anything else in .env) for ai_engine/reasoning.py
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.locations import router as locations_router
 from app.api.routes.verification import router as verification_router
 from app.api.routes.feasibility import router as feasibility_router
@@ -32,6 +33,20 @@ from ai_engine.routes.decision import router as decision_router
 app = FastAPI(
     title="NOMAD Backend",
     version="0.1.0"
+)
+
+# Paarth's frontend (Vite dev server, default http://localhost:5173) is a
+# different origin than this API (http://localhost:8000) -- without CORS
+# enabled, every fetch() call from the browser gets silently blocked by
+# the browser itself before it even reaches these routes. Wide open here
+# since this is a hackathon demo, not a public deployment; tighten
+# allow_origins to the real frontend URL before shipping this anywhere else.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(locations_router)
