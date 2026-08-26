@@ -13,7 +13,7 @@ from __future__ import annotations
 from app.services.regulatory_service import get_regulatory_data
 from app.services.permit_research_service import get_permit_research
 from ai_engine.schemas import DataGap, EvidenceBundle, SourceSystem
-from ai_engine.scoring import score_regulatory_fit
+from ai_engine.scoring import resolve_bool_field, score_regulatory_fit
 
 
 def flatten_regulatory_fields(regulatory) -> dict:
@@ -43,10 +43,18 @@ async def get_regulatory_evidence(
     # exception to a standardized company policy -- surfaced as a note on
     # the factor itself rather than a separate LLM judgment call, so it's
     # visible without spending another model call on every request.
+    #
+    # Uses resolve_bool_field(), not a bare `if fields.get(...)`: Mireye's
+    # raw value here can be a dict-wrapped or string-typed boolean (e.g.
+    # "False", a non-empty string, is truthy under Python's plain
+    # truthiness rules), which used to let in_opportunity_zone=False still
+    # produce an "in an opportunity zone" note. score_regulatory_fit()
+    # already had to guard against the same thing for scoring; this reuses
+    # that exact same coercion instead of a second, divergent check.
     local_exception_notes = []
-    if fields.get("in_opportunity_zone"):
+    if resolve_bool_field(fields, "in_opportunity_zone"):
         local_exception_notes.append("in an opportunity zone -- may qualify for local incentives")
-    if fields.get("in_air_quality_nonattainment"):
+    if resolve_bool_field(fields, "in_air_quality_nonattainment"):
         local_exception_notes.append("in an air-quality nonattainment area -- may require local permitting exceptions")
 
     all_gaps = list(gaps)

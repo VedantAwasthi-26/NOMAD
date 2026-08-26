@@ -12,12 +12,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Optional
 
 from app.services.site_selection_service import get_site_selection_data
 from ai_engine.agents.regulatory_agent import get_regulatory_evidence
 from ai_engine.agents.risk_agent import get_risk_evidence
 from ai_engine.agents.demand_agent import get_demand_evidence
-from ai_engine.schemas import DataGap, EvidenceBundle, FactorScore, Recommendation, SourceSystem
+from ai_engine.schemas import (
+    DataGap,
+    EvidenceBundle,
+    FactorScore,
+    Recommendation,
+    SourceSystem,
+    StartupContext,
+)
 from ai_engine.scoring import (
     apply_hard_floor,
     confidence_from_completeness,
@@ -67,7 +75,9 @@ def _degraded_factor(factor_name: str, weight: float, error: BaseException) -> t
     return factor, gap
 
 
-async def run_site_selection(address: str) -> Recommendation:
+async def run_site_selection(
+    address: str, startup_context: Optional[StartupContext] = None
+) -> Recommendation:
     """One call fans out to all three specialist agents in parallel, then
     aggregates. This is the concrete implementation of the Supervisor
     diagram's 'Where should we expand?' fan-out pattern for a single
@@ -80,7 +90,15 @@ async def run_site_selection(address: str) -> Recommendation:
     instead: that one factor gets a neutral, zero-confidence placeholder
     and a flagged gap, the other two agents' real evidence is still used,
     and requires_human_review is forced True so a human knows to check
-    the gap before trusting the recommendation."""
+    the gap before trusting the recommendation. (That degrade-and-flag
+    behavior is untouched by startup_context below -- a confirmed fact
+    about the business changes what the explanation can say, never
+    whether a data gap gets flagged or confidence gets reduced.)
+
+    startup_context is optional and does nothing to the scoring above --
+    it's threaded through only to the explanation/verification layer
+    (see reasoning.explain_and_verify), so a caller with no Memory data
+    yet gets byte-identical behavior to before this parameter existed."""
 
     site_data, regulatory_evidence, risk_evidence, demand_evidence = await asyncio.gather(
         get_site_selection_data(address),
@@ -201,4 +219,4 @@ async def run_site_selection(address: str) -> Recommendation:
         ),
     )
 
-    return explain_and_verify(recommendation)
+    return explain_and_verify(recommendation, startup_context=startup_context)

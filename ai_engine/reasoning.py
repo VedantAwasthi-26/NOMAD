@@ -45,7 +45,7 @@ from ai_engine.prompts import (
     build_explanation_user_prompt,
     build_verifier_user_prompt,
 )
-from ai_engine.schemas import Recommendation
+from ai_engine.schemas import Recommendation, StartupContext
 
 MAX_VERIFIER_RETRIES = 3
 # Must be openai/gpt-oss-120b or openai/gpt-oss-20b -- the two models Groq
@@ -146,12 +146,19 @@ def generate_explanation(payload: dict) -> str:
     return result.explanation
 
 
-def verify_explanation(factor_breakdown: list[dict], explanation: str) -> VerifierVerdict:
+def verify_explanation(
+    factor_breakdown: list[dict],
+    explanation: str,
+    startup_context: Optional[dict] = None,
+) -> VerifierVerdict:
     return _invoke_json_schema(
         _get_llm(temperature=0.0),
         [
             {"role": "system", "content": VERIFIER_SYSTEM_PROMPT},
-            {"role": "user", "content": build_verifier_user_prompt(factor_breakdown, explanation)},
+            {
+                "role": "user",
+                "content": build_verifier_user_prompt(factor_breakdown, explanation, startup_context),
+            },
         ],
         VerifierVerdict,
         _VERIFIER_RESPONSE_FORMAT,
@@ -174,11 +181,22 @@ def _fact_only_explanation(recommendation: Recommendation) -> str:
     return "\n".join(lines)
 
 
-def explain_and_verify(recommendation: Recommendation) -> Recommendation:
+def explain_and_verify(
+    recommendation: Recommendation, startup_context: Optional[StartupContext] = None
+) -> Recommendation:
     """The full Diagram-1 explanation -> verify -> retry loop. Mutates and
     returns the Recommendation with `explanation` and `verified_groundedness`
     filled in. Never raises -- on total failure it falls back to a
-    fact-only explanation rather than blocking the response."""
+    fact-only explanation rather than blocking the response.
+
+    startup_context is optional and purely additive: when omitted, the
+    payload/prompts are byte-for-byte what they were before this parameter
+    existed. When supplied, it's confirmed business-side facts (not
+    location data) that the explanation is allowed to reference and the
+    verifier is told to accept as grounding, alongside the factor
+    breakdown it already checked against."""
+
+    startup_context_dict = startup_context.model_dump() if startup_context else None
 
     payload = {
         "address": recommendation.address,
@@ -187,6 +205,7 @@ def explain_and_verify(recommendation: Recommendation) -> Recommendation:
         "hard_floor_triggered": recommendation.hard_floor_triggered,
         "factor_breakdown": [f.model_dump() for f in recommendation.factor_breakdown],
         "flagged_gaps": [g.model_dump() for g in recommendation.flagged_gaps],
+        "startup_context": startup_context_dict,
     }
     factor_breakdown_dicts = payload["factor_breakdown"]
 
@@ -194,7 +213,7 @@ def explain_and_verify(recommendation: Recommendation) -> Recommendation:
         explanation: Optional[str] = None
         for attempt in range(1, MAX_VERIFIER_RETRIES + 1):
             explanation = generate_explanation(payload)
-            verdict = verify_explanation(factor_breakdown_dicts, explanation)
+            verdict = verify_explanation(factor_breakdown_dicts, explanation, startup_context_dict)
             if verdict.grounded:
                 recommendation.explanation = explanation
                 recommendation.verified_groundedness = True

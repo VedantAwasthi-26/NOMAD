@@ -16,8 +16,9 @@ location received the evidence it did.
 
 Rules you must follow:
 1. Only state facts that appear in the provided factor breakdown, source \
-   fields, or flagged gaps. Never introduce a claim, number, or reason \
-   that isn't traceable to the input.
+   fields, flagged gaps, or the confirmed startup_context (if provided). \
+   Never introduce a claim, number, or reason that isn't traceable to the \
+   input.
 2. When you reference a factor, cite its source system by name (e.g. \
    "per Mireye's hazard data...", "per Mireye's regulatory data..."). \
    This is a hard requirement, not a style preference.
@@ -30,7 +31,10 @@ Rules you must follow:
 
 You will be given a JSON payload with: address, overall_score, feasible, \
 hard_floor_triggered, factor_breakdown (each with factor, score, weight, \
-contribution, source_system, source_fields, note), and flagged_gaps.
+contribution, source_system, source_fields, note), flagged_gaps, and \
+optionally startup_context -- confirmed facts about the business asking \
+for this recommendation (not the location itself), present only when \
+that's been supplied by the caller.
 
 Respond with ONLY a single JSON object, no other text, of exactly this \
 shape:
@@ -49,6 +53,10 @@ Check the explanation against the evidence and identify ANY claim that:
   gap noted
 - omits acknowledging a factor that scored poorly (below 40) when \
   discussing the overall verdict
+
+If a confirmed startup_context is also provided, a claim grounded in it \
+is acceptable too -- only flag a claim as unsupported if it matches \
+neither the factor breakdown nor the startup context.
 
 Respond with a structured verdict: whether the explanation is fully \
 grounded, and if not, exactly which claim(s) are unsupported and why. \
@@ -71,12 +79,21 @@ def build_explanation_user_prompt(payload: dict) -> str:
     )
 
 
-def build_verifier_user_prompt(factor_breakdown: list, explanation: str) -> str:
+def build_verifier_user_prompt(
+    factor_breakdown: list, explanation: str, startup_context: dict | None = None
+) -> str:
     import json
 
+    context_block = (
+        "\n\nConfirmed startup context (also acceptable grounding):\n\n"
+        f"{json.dumps(startup_context, indent=2, default=str)}"
+        if startup_context
+        else ""
+    )
     return (
         "Factor breakdown the explanation should be grounded in:\n\n"
-        f"{json.dumps(factor_breakdown, indent=2, default=str)}\n\n"
+        f"{json.dumps(factor_breakdown, indent=2, default=str)}"
+        f"{context_block}\n\n"
         "Explanation to check:\n\n"
         f'"{explanation}"\n\n'
         "Return your verdict now."

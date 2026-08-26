@@ -115,3 +115,55 @@ class Recommendation(BaseModel):
 
     mireye_field_count: int = 0  # how many distinct Mireye fields were used
     mireye_coverage_note: Optional[str] = None
+
+
+class StartupContext(BaseModel):
+    """Persistent, human-confirmed facts about the startup/business asking
+    for a recommendation -- carried across requests so agents don't have
+    to re-derive things Mireye can't tell them (this business's actual
+    intended use, a capability it has already confirmed it needs, etc.).
+
+    Deliberately separate from every other schema here: everything else in
+    this file describes a *location* (what Mireye/an agent found there).
+    This describes the *business* asking about it. Nothing in the engine
+    writes to a StartupContext directly -- it's read-only input, optional
+    everywhere it's threaded through (run_site_selection, explain_and_verify),
+    so today's behavior with no context supplied is completely unchanged.
+    See MemoryUpdateProposal for how a confirmed change is meant to reach
+    one of these."""
+
+    startup_id: str
+    business_type: Optional[str] = None
+    intended_use: Optional[str] = None
+    required_capabilities: list[str] = Field(
+        default_factory=list,
+        description="Confirmed operational needs, e.g. 'cold storage', 'three-phase power'",
+    )
+    confirmed_facts: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Free-form confirmed facts not yet promoted to a named field above",
+    )
+    last_updated: Optional[str] = None  # ISO-8601 timestamp, set by whatever store owns this
+
+
+class MemoryUpdateProposal(BaseModel):
+    """A proposed addition/change to a startup's StartupContext -- what an
+    agent emits when it notices something worth confirming with the
+    startup directly, most often a DataGap Mireye can't fill but the
+    startup itself could answer (the query-based-intake idea: instead of
+    just flagging a gap, propose asking about it).
+
+    Deliberately inert: nothing in this engine applies a
+    MemoryUpdateProposal to stored data on its own -- `status` starts
+    "pending" and stays that way until a human accepts or rejects it
+    wherever StartupContext actually lives. This keeps memory writes
+    human-confirmed by construction rather than something an LLM could
+    silently mutate."""
+
+    startup_id: str
+    field: str
+    proposed_value: Any
+    reason: str
+    source_system: SourceSystem = SourceSystem.DERIVED
+    confidence: float = Field(0.5, ge=0, le=1)
+    status: str = Field("pending", description="pending | confirmed | rejected")

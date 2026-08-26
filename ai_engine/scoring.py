@@ -69,6 +69,25 @@ def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
     return max(low, min(high, value))
 
 
+def resolve_bool_field(fields: dict, key: str) -> bool | None:
+    """Normalizes a Mireye boolean-ish field to an actual bool (or None if
+    missing). Mireye fields can arrive dict-wrapped ({'value': ...}, see
+    `_get` above) and/or as a string ('true'/'false') instead of a native
+    bool -- this is the single place that handles both, so a falsy-but-
+    truthy value (a non-empty string like "False", or a wrapped dict)
+    never gets read as "flag is set" by a plain `if fields.get(key):`
+    check elsewhere in the engine. Exported (not `_`-prefixed) so any
+    agent reading a raw boolean-ish field directly -- not just the
+    scorers here -- uses the same coercion instead of a second, divergent
+    implementation."""
+    value, present = _get(fields, key)
+    if not present:
+        return None
+    if isinstance(value, str):
+        return value.strip().lower() == "true"
+    return bool(value)
+
+
 def _score_and_gap(
     factor: str,
     fields: dict,
@@ -346,8 +365,7 @@ def score_regulatory_fit(regulatory_fields: dict) -> tuple[FactorScore, list[Dat
     def scorer(v: dict) -> float:
         score = 100.0
         for field, penalty in _REGULATORY_PENALTY_FIELDS.items():
-            value = v.get(field)
-            if value is True or (isinstance(value, str) and value.lower() == "true"):
+            if resolve_bool_field(v, field):
                 score -= penalty
         fire_zone = v.get("fire_hazard_severity_zone_class")
         if fire_zone is not None and str(fire_zone).lower() in ("high", "very high"):
