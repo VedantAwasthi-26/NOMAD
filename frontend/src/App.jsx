@@ -1,11 +1,15 @@
 import { Routes, Route, useLocation } from "react-router-dom";
 import Sidebar from "@/components/Sidebar";
 import OverviewPage from "@/pages/OverviewPage";
+import NewDecisionPage from "@/pages/NewDecisionPage";
 import FeasibilityPage from "@/pages/FeasibilityPage";
+import ComparePage from "@/pages/ComparePage";
+import ReverseLogisticsPage from "@/pages/ReverseLogisticsPage";
 import NetworkPage from "@/pages/NetworkPage";
 import RiskPage from "@/pages/RiskPage";
 import DataSourcesPage from "@/pages/DataSourcesPage";
 import SettingsPage from "@/pages/SettingsPage";
+import HistoryPage from "@/pages/HistoryPage";
 import { NAV, PAGE_TITLE } from "@/data/nav";
 import { AppStateProvider, useAppState } from "@/lib/store";
 import { USE_MOCK } from "@/lib/api";
@@ -46,10 +50,14 @@ function AppShell() {
         <div className="max-w-5xl px-8 py-8">
           <Routes>
             <Route path="/" element={<OverviewPage />} />
+            <Route path="/new" element={<NewDecisionPage />} />
             <Route path="/feasibility" element={<FeasibilityPage />} />
+            <Route path="/compare" element={<ComparePage />} />
+            <Route path="/logistics" element={<ReverseLogisticsPage />} />
             <Route path="/network" element={<NetworkPage />} />
             <Route path="/risk" element={<RiskPage />} />
             <Route path="/data-sources" element={<DataSourcesPage />} />
+            <Route path="/history" element={<HistoryPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </div>

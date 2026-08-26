@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import StatusPill from "@/components/StatusPill";
 import MapView from "@/components/MapView";
@@ -22,7 +23,7 @@ function verdictTone(score) {
 }
 
 export default function FeasibilityPage() {
-  const { activeAddress, watchlist } = useAppState();
+  const { activeAddress, watchlist, logDecision } = useAppState();
 
   // Raw evidence — Vedant's /feasibility/ bucket (lat/lng + factors, no
   // scoring/explanation).
@@ -39,23 +40,19 @@ export default function FeasibilityPage() {
     { enabled: !!activeAddress }
   );
 
-  // Comparison table: score every saved (watchlist) address the same way,
-  // so this is real ranking across addresses the user actually entered —
-  // not a hardcoded 3-row table.
-  const [comparisons, setComparisons] = useState({});
+  // Every completed feasibility run is a real decision — log it so it
+  // shows up in History and on the Overview "Decisions" list.
   useEffect(() => {
-    let cancelled = false;
-    watchlist.forEach((w) => {
-      if (comparisons[w.address]) return;
-      api.decideFeasibility(w.address).then((result) => {
-        if (!cancelled) setComparisons((prev) => ({ ...prev, [w.address]: result }));
-      }).catch(() => {});
+    if (!rec) return;
+    logDecision({
+      type: "feasibility",
+      address: rec.address,
+      score: rec.overall_score,
+      feasible: rec.feasible,
+      summary: `Feasibility · score ${rec.overall_score}`,
     });
-    return () => {
-      cancelled = true;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchlist]);
+  }, [rec]);
 
   const mapSites = activeAddress && raw
     ? [{ id: activeAddress, name: activeAddress, lat: raw.lat, lng: raw.lng, score: rec?.overall_score, tone: rec ? verdictTone(rec.overall_score) : "slate" }]
@@ -212,40 +209,17 @@ export default function FeasibilityPage() {
 
       {watchlist.length > 0 && (
         <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold text-slate-100">Saved site comparison</CardTitle>
-            <div className="text-[10px] font-mono text-slate-500">
-              every address saved from the address bar, scored via /decision/feasibility
+          <CardContent className="p-4 flex items-center justify-between gap-3">
+            <div className="text-xs text-slate-400">
+              {watchlist.length} site{watchlist.length === 1 ? "" : "s"} saved — see them
+              side-by-side on the Compare page.
             </div>
-          </CardHeader>
-          <CardContent className="overflow-x-auto pt-0">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-slate-500 border-b border-slate-800">
-                  <th className="text-left font-mono font-normal py-2">Address</th>
-                  <th className="text-right font-mono font-normal">Score</th>
-                  <th className="text-right font-mono font-normal">Verdict</th>
-                </tr>
-              </thead>
-              <tbody>
-                {watchlist.map((w) => {
-                  const c = comparisons[w.address];
-                  return (
-                    <tr key={w.id} className="border-b border-slate-800/60 last:border-0">
-                      <td className="py-2.5 text-slate-200 whitespace-nowrap">{w.address}</td>
-                      <td className="text-right text-teal-400 font-semibold">{c ? c.overall_score : "…"}</td>
-                      <td className="text-right">
-                        {c && (
-                          <StatusPill tone={verdictTone(c.overall_score)}>
-                            {c.feasible ? "Feasible" : "Not recommended"}
-                          </StatusPill>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <Link
+              to="/compare"
+              className="text-xs font-semibold text-teal-400 hover:text-teal-300 whitespace-nowrap"
+            >
+              Open Compare →
+            </Link>
           </CardContent>
         </Card>
       )}
