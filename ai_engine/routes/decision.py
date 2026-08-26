@@ -26,15 +26,21 @@ Two generations of endpoints live here on purpose:
 - /intake is the query-based intake agent: takes a startup's own
   submitted data (business_type, intended_use, required_capabilities),
   not location data, and either confirms it's complete or returns
-  specific StartupDataRequests for whatever's missing. Meant to run
-  before site-selection/agents, not alongside it -- its output
-  (StartupContext) is what that endpoint would eventually take as
-  startup_context once the frontend collects it.
+  specific StartupDataRequests for whatever's missing. It persists what
+  it's given (ai_engine/storage.py) -- a startup_id seen before has its
+  new answers merged with what's already on file, not overwritten. GET
+  /intake/{startup_id} reads back whatever's currently on file with no
+  new submission involved.
+- /site-selection/agents optionally takes a startup_id alongside address:
+  when given, it looks up that startup's stored memory and threads it
+  into the explanation/verification layer automatically, so a caller
+  doesn't have to resend a startup's confirmed facts on every single
+  recommendation request once intake has been done once.
 """
 
 from typing import Any, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.schemas.verification import VerificationRequest
@@ -45,7 +51,7 @@ from ai_engine.schemas import Recommendation, StartupContext, StartupDataRequest
 from ai_engine.graph import build_graph
 from ai_engine.agents.site_selection_agent import run_site_selection
 from ai_engine.agents.logistics_agent import get_logistics_evidence, get_inventory_transfer_evidence
-from ai_engine.agents.intake_agent import intake_startup_data
+from ai_engine.agents.intake_agent import get_stored_startup_context, intake_startup_data
 from ai_engine import supervisor as supervisor_module
 
 router = APIRouter(prefix="/decision", tags=["Decision Engine"])
@@ -124,8 +130,13 @@ async def decide_site_selection(request: VerificationRequest):
 # ---------------------------------------------------------------------------
 
 
+class SiteSelectionAgentsRequest(BaseModel):
+    address: str
+    startup_id: Optional[str] = None
+
+
 @router.post("/site-selection/agents", response_model=Recommendation)
-async def decide_site_selection_agents(request: VerificationRequest):
+async def decide_site_selection_agents(request: SiteSelectionAgentsRequest):
     """The flagship endpoint for the confirmed architecture: Site
     Selection fans out in parallel to the Regulatory & Compliance, Risk &
     Monitoring, and Demand & Market agents (each backed by the shared
@@ -133,8 +144,19 @@ async def decide_site_selection_agents(request: VerificationRequest):
     alongside its own accessibility/infrastructure scoring, applies the
     hard floor, and runs the explanation + verifier loop. This is what
     should be demoed as 'the multi-agent system', not /site-selection
-    above (which is the earlier single-pipeline version)."""
-    return await run_site_selection(request.address)
+    above (which is the earlier single-pipeline version).
+
+    startup_id is optional and additive: omit it and this behaves exactly
+    as before. Pass it and, if that startup has ever completed intake
+    (POST /intake), their stored StartupContext is looked up automatically
+    and threaded into the explanation/verification layer -- no need to
+    resend business_type/intended_use/required_capabilities on every
+    single recommendation call once intake's been done once. An unknown
+    or never-onboarded startup_id just means no stored context is found,
+    which is identical to not passing startup_id at all -- this never
+    fails a request just because memory hasn't been built up yet."""
+    startup_context = get_stored_startup_context(request.startup_id) if request.startup_id else None
+    return await run_site_selection(request.address, startup_context=startup_context)
 
 
 class LogisticsRequest(BaseModel):
@@ -184,15 +206,34 @@ class IntakeResponse(BaseModel):
 
 @router.post("/intake", response_model=IntakeResponse)
 async def decide_intake(request: IntakeRequest) -> IntakeResponse:
-    """Query-based intake agent: builds a StartupContext from whatever the
-    startup submitted and checks it against the three fields confirmed
-    over the team's design discussion (business_type, intended_use,
-    required_capabilities). `complete=False` means `missing` has at least
-    one StartupDataRequest the frontend should turn into a follow-up
-    question -- nothing downstream should treat this startup_context as
-    ready for scoring until `complete` is True."""
+    """Query-based intake agent: merges whatever the startup submitted
+    into whatever's already stored for that startup_id (ai_engine/
+    storage.py), then checks the result against the three fields
+    confirmed over the team's design discussion (business_type,
+    intended_use, required_capabilities). `complete=False` means
+    `missing` has at least one StartupDataRequest the frontend should
+    turn into a follow-up question -- nothing downstream should treat
+    this startup_context as ready for scoring until `complete` is True.
+
+    Calling this again later for the same startup_id -- e.g. answering
+    one specific StartupDataRequest from a previous call -- fills in just
+    that field; it does not need (and should not resend) facts already
+    confirmed in an earlier call."""
     context, missing = intake_startup_data(request.model_dump())
     return IntakeResponse(complete=not missing, startup_context=context, missing=missing)
+
+
+@router.get("/intake/{startup_id}", response_model=StartupContext)
+async def get_intake(startup_id: str) -> StartupContext:
+    """Read-only: whatever's currently on file for this startup, with no
+    new submission involved. 404s for a startup_id that's never completed
+    an /intake call -- there's nothing stored to return, as opposed to an
+    empty-but-valid StartupContext, which would misleadingly suggest this
+    startup was onboarded with nothing confirmed."""
+    context = get_stored_startup_context(startup_id)
+    if context is None:
+        raise HTTPException(status_code=404, detail=f"No stored context for startup_id {startup_id!r}")
+    return context
 
 
 class SupervisorQueryRequest(BaseModel):
