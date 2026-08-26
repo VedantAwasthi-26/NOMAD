@@ -18,7 +18,9 @@ jobs:
         with:
           filters: |
             ai_engine:
-              - 'AI Engine/**'
+              - 'ai_engine/**'
+              - 'conftest.py'
+              - 'backend/requirements.txt'
 
   build-and-test:
     needs: changes
@@ -29,50 +31,38 @@ jobs:
     # var first, then check that instead (the standard workaround).
     env:
       HAS_MIREYE_KEY: ${{ secrets.MIREYE_API_KEY != '' }}
-    defaults:
-      run:
-        working-directory: 'AI Engine'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # As of now "AI Engine/" only holds a placeholder README — once the
-      # real app lands (with its own requirements.txt) this turns on
-      # automatically. Until then, this exits cleanly.
-      - name: Check for real project
-        id: probe
-        run: |
-          if [ -f requirements.txt ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "No requirements.txt yet under 'AI Engine/' — nothing to build."
-          fi
-
+      # ai_engine/ is a real project now (renamed from the old "AI
+      # Engine" placeholder folder) -- its own dependencies live in
+      # backend/requirements.txt since the two got wired together, not
+      # a requirements.txt inside ai_engine/ itself.
       - name: Install dependencies
-        if: steps.probe.outputs.present == 'true'
-        run: pip install -r requirements.txt
+        run: pip install -r backend/requirements.txt
 
       - name: Compile check (catches syntax errors)
-        if: steps.probe.outputs.present == 'true'
-        run: python -m compileall -q app
+        run: python -m compileall -q ai_engine
 
-      # app/engine/tests/ (e.g. test_scoring.py) is pure-logic pytest —
-      # no external calls, no secrets needed, safe to always run.
+      # ai_engine/tests/ (e.g. test_scoring.py) is pure-logic pytest —
+      # no external calls, no secrets needed, safe to always run. Run
+      # from the repo root (not a subfolder) so conftest.py at the root
+      # puts both `app` and `ai_engine` on sys.path correctly.
       - name: Unit tests (pure logic, no external calls)
-        if: steps.probe.outputs.present == 'true'
-        run: pytest app/engine/tests -v
+        run: pytest ai_engine/tests -v
 
       # Root-level test_*.py scripts hit the real Mireye API the same
       # way backend's do — only run with the secret configured.
       - name: Integration tests (requires MIREYE_API_KEY secret)
-        if: steps.probe.outputs.present == 'true' && env.HAS_MIREYE_KEY == 'true'
+        if: env.HAS_MIREYE_KEY == 'true'
         env:
           MIREYE_API_KEY: ${{ secrets.MIREYE_API_KEY }}
           MIREYE_BASE_URL: ${{ secrets.MIREYE_BASE_URL }}
         run: |
+          shopt -s nullglob
           for f in test_*.py; do
             echo "::group::$f"
             python "$f"
