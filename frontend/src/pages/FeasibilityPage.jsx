@@ -22,6 +22,31 @@ function verdictTone(score) {
   return "red";
 }
 
+// Mireye fields sometimes arrive dict-wrapped ({ value: ..., ...metadata })
+// instead of as a bare value -- the backend's own scoring code already
+// unwraps this exact shape (see ai_engine/scoring.py's `_get()` helper).
+// The frontend was doing `String(v)` directly on the raw field, which for
+// a wrapped object always prints the literal text "[object Object]"
+// instead of the real number/string underneath. This mirrors the same
+// unwrapping convention on the frontend side.
+function formatFactorValue(v) {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "object") {
+    if ("value" in v) {
+      const inner = v.value;
+      return inner === null || inner === undefined ? "—" : String(inner);
+    }
+    // Unknown object shape -- show it as compact JSON rather than the
+    // useless "[object Object]" so it's at least inspectable.
+    try {
+      return JSON.stringify(v);
+    } catch {
+      return String(v);
+    }
+  }
+  return String(v);
+}
+
 export default function FeasibilityPage() {
   const { activeAddress, watchlist, logDecision } = useAppState();
 
@@ -99,7 +124,7 @@ export default function FeasibilityPage() {
                     {Object.entries(raw.factors || {}).map(([k, v]) => (
                       <div key={k} className="flex justify-between text-[11px]">
                         <span className="text-slate-500 font-mono">{k}</span>
-                        <span className="text-slate-300">{String(v)}</span>
+                        <span className="text-slate-300">{formatFactorValue(v)}</span>
                       </div>
                     ))}
                   </div>
