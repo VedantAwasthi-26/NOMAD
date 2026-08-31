@@ -149,6 +149,9 @@ def generate_explanation(payload: dict) -> str:
 def verify_explanation(
     factor_breakdown: list[dict],
     explanation: str,
+    overall_score: float,
+    feasible: Optional[bool],
+    hard_floor_triggered: bool,
     startup_context: Optional[dict] = None,
 ) -> VerifierVerdict:
     return _invoke_json_schema(
@@ -157,7 +160,9 @@ def verify_explanation(
             {"role": "system", "content": VERIFIER_SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": build_verifier_user_prompt(factor_breakdown, explanation, startup_context),
+                "content": build_verifier_user_prompt(
+                    factor_breakdown, explanation, overall_score, feasible, hard_floor_triggered, startup_context
+                ),
             },
         ],
         VerifierVerdict,
@@ -214,7 +219,14 @@ def explain_and_verify(
         attempts_log: list[dict] = []
         for attempt in range(1, MAX_VERIFIER_RETRIES + 1):
             explanation = generate_explanation(payload)
-            verdict = verify_explanation(factor_breakdown_dicts, explanation, startup_context_dict)
+            verdict = verify_explanation(
+                factor_breakdown_dicts,
+                explanation,
+                recommendation.overall_score,
+                recommendation.feasible,
+                recommendation.hard_floor_triggered,
+                startup_context_dict,
+            )
             attempts_log.append(
                 {"attempt": attempt, "explanation": explanation, "issues": verdict.issues}
             )
