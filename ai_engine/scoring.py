@@ -35,8 +35,18 @@ SITE_SELECTION_WEIGHTS = {
 
 # Below this hazard_safety score, the hard floor caps the overall score
 # and forces human review regardless of how well everything else scored.
+# The cap itself SLIDES with how bad the hazard reading actually is,
+# instead of collapsing every triggering case to one flat number: a
+# hazard_safety score just under the threshold caps close to
+# HARD_FLOOR_MAX_CAP, while a genuinely dangerous reading (hazard_safety
+# near 0) caps much lower, near HARD_FLOOR_MIN_CAP. This keeps the
+# original safety guarantee -- nothing with a bad hazard reading can ever
+# look "fine" -- while still letting the score itself communicate how bad
+# the reading was, instead of every capped case reading as an identical
+# number regardless of severity.
 HAZARD_HARD_FLOOR_THRESHOLD = 50.0
-HARD_FLOOR_CAPPED_SCORE = 40.0
+HARD_FLOOR_MAX_CAP = 40.0  # cap when hazard_safety is just under the threshold
+HARD_FLOOR_MIN_CAP = 10.0  # cap when hazard_safety is at its worst (0)
 
 FEASIBILITY_PASS_THRESHOLD = 55.0
 
@@ -402,12 +412,22 @@ def reweight(factor: FactorScore, new_weight: float) -> FactorScore:
 
 def apply_hard_floor(factors: list[FactorScore], overall_score: float) -> tuple[float, bool]:
     """The safety net a pure weighted average can't provide: a bad
-    hazard_safety reading caps the overall score and forces review,
-    no matter how good everything else looks."""
+    hazard_safety reading caps the overall score and forces review, no
+    matter how good everything else looks.
+
+    The cap slides with severity (see the constants above) instead of
+    collapsing every triggering case to the same fixed number -- a
+    hazard_safety score of 49 and one of 5 both get capped, but not to
+    the same value, so the overall score still communicates how bad the
+    hazard reading was rather than hiding it behind an identical "40"
+    for every capped case."""
     hazard = next((f for f in factors if f.factor == "hazard_safety"), None)
-    if hazard is not None and hazard.score < HAZARD_HARD_FLOOR_THRESHOLD:
-        return min(overall_score, HARD_FLOOR_CAPPED_SCORE), True
-    return overall_score, False
+    if hazard is None or hazard.score >= HAZARD_HARD_FLOOR_THRESHOLD:
+        return overall_score, False
+
+    severity_fraction = _clamp(hazard.score / HAZARD_HARD_FLOOR_THRESHOLD, 0.0, 1.0)
+    sliding_cap = HARD_FLOOR_MIN_CAP + severity_fraction * (HARD_FLOOR_MAX_CAP - HARD_FLOOR_MIN_CAP)
+    return min(overall_score, round(sliding_cap, 2)), True
 
 
 def score_site_selection(

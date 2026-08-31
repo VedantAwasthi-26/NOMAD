@@ -42,21 +42,38 @@ shape:
 
 
 VERIFIER_SYSTEM_PROMPT = """You are a fact-checker reviewing an AI-generated explanation of a site \
-recommendation. You will be given the same factor breakdown the \
-explanation was supposed to be based on, plus the explanation text \
-itself.
+recommendation. You will be given the recommendation's actual \
+overall_score, feasible verdict, and hard_floor_triggered flag, the \
+factor breakdown the explanation was supposed to be based on, and the \
+explanation text itself.
 
 Check the explanation against the evidence and identify ANY claim that:
-- states a number not present in the factor breakdown
+- states a number that matches neither a value in the factor breakdown \
+  nor the provided overall_score
 - describes a factor's direction (good/bad) inconsistently with its score
 - claims something is confirmed when the corresponding factor has a data \
   gap noted
 - omits acknowledging a factor that scored poorly (below 40) when \
   discussing the overall verdict
+- states a feasibility verdict inconsistent with the provided feasible \
+  value
+
+IMPORTANT -- hard floor exception: when hard_floor_triggered is true, \
+overall_score is a capped safety value and will legitimately NOT equal \
+the sum of the individual factor contributions in factor_breakdown. \
+That's the hard-floor policy intentionally overriding the weighted \
+average (one bad hazard_safety reading caps the whole recommendation, \
+no matter how good everything else scored) -- it is not a fabricated or \
+unsupported number. Do not flag overall_score itself, or a statement \
+that "a hard floor was triggered" / "this isn't feasible because of a \
+hard floor," as unsupported when hard_floor_triggered is true -- that \
+claim is directly grounded in the hard_floor_triggered flag you were \
+given, even though it won't match the factor breakdown's arithmetic.
 
 If a confirmed startup_context is also provided, a claim grounded in it \
 is acceptable too -- only flag a claim as unsupported if it matches \
-neither the factor breakdown nor the startup context.
+neither the factor breakdown, the provided overall_score/feasible/ \
+hard_floor_triggered facts, nor the startup context.
 
 Respond with a structured verdict: whether the explanation is fully \
 grounded, and if not, exactly which claim(s) are unsupported and why. \
@@ -80,7 +97,12 @@ def build_explanation_user_prompt(payload: dict) -> str:
 
 
 def build_verifier_user_prompt(
-    factor_breakdown: list, explanation: str, startup_context: dict | None = None
+    factor_breakdown: list,
+    explanation: str,
+    overall_score: float,
+    feasible: bool | None,
+    hard_floor_triggered: bool,
+    startup_context: dict | None = None,
 ) -> str:
     import json
 
@@ -91,6 +113,10 @@ def build_verifier_user_prompt(
         else ""
     )
     return (
+        "Recommendation facts to check the explanation against:\n\n"
+        f"overall_score: {overall_score}\n"
+        f"feasible: {feasible}\n"
+        f"hard_floor_triggered: {hard_floor_triggered}\n\n"
         "Factor breakdown the explanation should be grounded in:\n\n"
         f"{json.dumps(factor_breakdown, indent=2, default=str)}"
         f"{context_block}\n\n"
